@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>118d OBD Dash</title>
+<style>
+:root{
+  --bg:#0b0d10; --panel:#14181d; --panel2:#1b2027; --line:#262d36;
+  --text:#e8edf2; --dim:#7d8894; --accent:#1c69d4; --accent2:#4fa3ff;
+  --ok:#2ecc71; --warn:#f5a623; --bad:#ff4d4f;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{font-weight:700;letter-spacing:.04em;margin-right:auto;display:flex;align-items:center;gap:10px}
+.brand .stripe{display:inline-flex;height:14px}
+.brand .stripe i{width:5px;height:14px;display:block}
+button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--accent2)}
+button.primary{background:var(--accent);border-color:var(--accent)}
+button.danger{border-color:#5a2326;color:#ff8a8c}
+button:disabled{opacity:.4;cursor:default}
+input,select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:13px ui-monospace,Menlo,Consolas,monospace;min-width:0}
+select{font-family:inherit}
+input:focus,select:focus{outline:none;border-color:var(--accent2)}
+.pill{padding:4px 10px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);font-size:12px;color:var(--dim)}
+.pill.on{color:var(--ok);border-color:#1f5c38}
+.pill.err{color:var(--bad);border-color:#5a2326}
+main{max-width:1200px;margin:0 auto;padding:16px;display:grid;gap:16px}
+.gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}
+.card h3{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600}
+.gauge{position:relative;display:flex;justify-content:center}
+.gauge svg{width:100%;max-width:300px}
+.gauge .read{position:absolute;top:42%;left:0;right:0;text-align:center}
+.gauge .val{font-size:46px;font-weight:700;font-variant-numeric:tabular-nums}
+.gauge .unit{color:var(--dim);font-size:13px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+.tile .lbl{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+.tile .v{font-size:26px;font-weight:650;font-variant-numeric:tabular-nums;margin-top:4px}
+.tile .v small{font-size:13px;color:var(--dim);font-weight:400;margin-left:3px}
+.tile.na{opacity:.35}
+.tile.warn .v{color:var(--warn)} .tile.bad .v{color:var(--bad)}
+canvas{width:100%;height:160px;display:block}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.dtc{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:8px;background:var(--panel2);margin-top:8px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.dtc b{color:var(--warn)}
+#log,#xout{font:12px ui-monospace,Menlo,Consolas,monospace;color:var(--dim);max-height:220px;overflow:auto;white-space:pre-wrap;background:#080a0c;border-radius:8px;padding:8px;margin-top:8px}
+#xout{color:var(--text);max-height:280px}
+#xout:empty{display:none}
+details summary{cursor:pointer;color:var(--dim)}
+.meta{color:var(--dim);font-size:12px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--dim)}
+.legend i{display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle}
+.ok{color:var(--ok)} .no{color:var(--bad)} .chg{color:var(--warn)}
+.tablewrap{overflow-x:auto}
+.xt{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+.xt th{text-align:left;color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:6px 8px;border-bottom:1px solid var(--line)}
+.xt td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.xt tr.dimrow{opacity:.35}
+.xt tr.changed td{background:rgba(245,166,35,.08)}
+.code{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--warn)}
+.code a{color:inherit}
+.regen{display:flex;gap:14px;align-items:center;margin:6px 0 4px}
+.dot{width:18px;height:18px;border-radius:50%;background:#3a4450;flex:none}
+.dot.on{background:var(--warn);box-shadow:0 0 14px var(--warn);animation:pulse 1.2s infinite}
+.dot.off{background:var(--ok)}
+@keyframes pulse{50%{opacity:.35}}
+.regentxt{font-size:22px;font-weight:650}
+.vote{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);white-space:nowrap}
+.vote.on{color:var(--warn);border-color:#6b4a12} .vote.off{color:var(--ok);border-color:#1f5c38} .vote.none{color:var(--dim)}
+.xt tr.used td{background:rgba(79,163,255,.08)} .xt tr.used td:first-child{box-shadow:inset 3px 0 0 var(--accent2)}
+.badge{font-size:11px;color:var(--accent2);margin-left:6px;white-space:nowrap}
+.ev{display:flex;gap:10px;font-size:12px;padding:3px 0;border-bottom:1px dashed var(--line)}
+.xt tr.dimrow-soft td{color:var(--dim)}
+.copywrap{position:relative}
+.copybtn{position:absolute;top:2px;right:2px;padding:3px 9px;font-size:11px;border-radius:6px;background:var(--panel2);opacity:.85;z-index:1}
+.copybtn:hover{opacity:1}
+.copywrap:has(> :empty) > .copybtn{display:none}
+.copywrap > .tablewrap:not(:empty){padding-top:22px}
+#info,#xout,#log,#dtcs,#regenEvents{padding-right:72px}
+.ev time{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--dim)}
+@media (max-width:600px){ .gauge .val{font-size:38px} header{padding:10px} }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="stripe"><i style="background:#81c4ff"></i><i style="background:#16588e"></i><i style="background:#e7222e"></i></span>118d OBD Dash</div>
+  <select id="car" title="Your car — sets module list and DPF method">
+    <option value="e87">E87 118d · N47 (2007–2011)</option>
+    <option value="f20n47">F20 118d · N47 (2011–2015)</option>
+    <option value="b47">F20/F40 118d · B47 (2015+)</option>
+  </select>
+  <span id="status" class="pill">Disconnected</span>
+  <button id="btnBle" class="primary" title="For BLE / Bluetooth 4.0 adapters (Android, Mac, Windows Chrome)">Connect Bluetooth LE</button>
+  <button id="btnSerial" title="For classic Bluetooth (paired, COM port) or USB adapters — desktop Chrome/Edge">Connect Serial / Classic BT</button>
+  <button id="btnDemo">Demo</button>
+  <button id="btnStop" disabled>Disconnect</button>
+</header>
+
+<main>
+  <div class="meta" id="info">Adapter: — · Protocol: — · VIN: —</div>
+
+  <section class="gauges">
+    <div class="card"><h3>Speed</h3><div class="gauge" id="gSpeed"></div></div>
+    <div class="card"><h3>Engine RPM</h3><div class="gauge" id="gRpm"></div></div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <h3 style="margin:0">DPF · particulate filter</h3>
+      <button id="btnDpfWatch" disabled>Watch BMW DPF values</button>
+    </div>
+    <div class="regen"><span id="regenDot" class="dot"></span>
+      <div><div id="regenTxt" class="regentxt">Unknown</div><div id="regenWhy" class="meta">Connect to see regeneration status.</div></div></div>
+    <div id="regenSignals" class="tablewrap"></div>
+    <div id="regenEvents"></div>
+    <details style="margin-top:10px"><summary>All BMW DPF values</summary><div id="dpfBmw" class="tablewrap"></div></details>
+  </section>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between"><h3 style="margin:0">Last 60 seconds</h3>
+      <div class="legend"><span><i style="background:var(--accent2)"></i>Speed</span><span><i style="background:var(--warn)"></i>RPM</span></div></div>
+    <canvas id="chart"></canvas>
+  </section>
+
+  <section class="gauges">
+    <div class="card">
+      <h3>Fault codes (standard OBD)</h3>
+      <div class="row">
+        <button id="btnDtc" disabled>Read codes</button>
+        <button id="btnClear" class="danger" disabled>Clear codes</button>
+      </div>
+      <div id="dtcs" class="meta" style="margin-top:8px">Not read yet.</div>
+    </div>
+    <div class="card">
+      <h3>Trip log</h3>
+      <div class="row">
+        <button id="btnRec" disabled>Start recording</button>
+        <button id="btnCsv" disabled>Export CSV</button>
+        <span class="meta" id="recInfo">0 samples</span>
+      </div>
+      <div class="meta" style="margin-top:8px">Refresh rate: <span id="hz">—</span></div>
+      <details style="margin-top:10px"><summary>Adapter traffic</summary><div id="log"></div></details>
+    </div>
+  </section>
+
+  <section class="card">
+    <h3>Expert · BMW direct access (read-only)</h3>
+    <div class="meta">Talks to individual modules with BMW addressing. Only read requests are allowed. Live gauges pause while these run.</div>
+    <div class="row" style="margin-top:10px">
+      <button id="btnCheck" disabled>Check adapter</button>
+      <button id="btnScan" disabled>Scan all modules</button>
+      <button id="btnReport">Copy report for Claude</button>
+    </div>
+    <div id="scan" class="tablewrap"></div>
+    <div class="row" style="margin-top:14px">
+      <input id="xTarget" placeholder="Module, e.g. 12" style="width:130px">
+      <input id="xReq" placeholder="Request, e.g. 2C 10 05 AA or ATRV" style="flex:1;min-width:170px">
+      <button id="btnSend" disabled>Send</button>
+    </div>
+    <div class="meta" style="margin-top:6px">Leave Module empty to send a plain AT or OBD command. Allowed module requests: 22, 21, 1A (read data), 19, 18 (read faults), 2C 10 (BMW measurement read), 3E.</div>
+    <div id="xout"></div>
+    <details style="margin-top:14px"><summary>Identifier sweep (for engines without known DPF identifiers, e.g. B47)</summary>
+      <div class="row" style="margin-top:10px">
+        <span class="meta">Read engine identifiers 22</span>
+        <input id="swFrom" value="4000" style="width:80px"><span class="meta">to</span><input id="swTo" value="40FF" style="width:80px">
+        <button id="btnSweep" disabled>Sweep</button>
+        <button id="btnWatchFound" disabled>Watch these</button>
+      </div>
+      <div id="sweep" class="tablewrap"></div>
+    </details>
+  </section>
+</main>
+
+<script>
+// ---------- helpers ----------
+const $ = id=>document.getElementById(id);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const hx=n=>n.toString(16).toUpperCase().padStart(2,'0');
+const hexs=a=>a.map(hx).join(' ');
+const asc=a=>a.map(b=>b>=32&&b<127?String.fromCharCode(b):'·').join('');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const bytesOf=hex=>(hex.match(/../g)||[]).map(x=>parseInt(x,16));
+const t16=(x,i)=>x[i]*256+x[i+1];
+
+// ---------- standard OBD PIDs (f gets A, B and the full byte list) ----------
+const PIDS = {
+  '0C':{k:'rpm',  f:(a,b)=>(a*256+b)/4},
+  '0D':{k:'speed',f:a=>a},
+  '05':{k:'coolant',lbl:'Coolant',u:'°C',f:a=>a-40,d:0,warn:v=>v>105,bad:v=>v>112,slow:1},
+  '5C':{k:'oil',lbl:'Oil temp',u:'°C',f:a=>a-40,d:0,warn:v=>v>125,bad:v=>v>135,slow:1},
+  '0F':{k:'iat',lbl:'Intake air',u:'°C',f:a=>a-40,d:0,slow:1},
+  '46':{k:'amb',lbl:'Ambient',u:'°C',f:a=>a-40,d:0,slow:1},
+  '11':{k:'throttle',lbl:'Throttle',u:'%',f:a=>a*100/255,d:0},
+  '04':{k:'load',lbl:'Engine load',u:'%',f:a=>a*100/255,d:0},
+  '10':{k:'maf',lbl:'Air flow (MAF)',u:'g/s',f:(a,b)=>(a*256+b)/100,d:1},
+  '0B':{k:'map',lbl:'Manifold pres.',u:'kPa',f:a=>a,d:0},
+  '33':{k:'baro',lbl:'Barometric',u:'kPa',f:a=>a,d:0,slow:1},
+  '23':{k:'rail',lbl:'Rail pressure',u:'bar',f:(a,b)=>(a*256+b)/10,d:0},
+  '5E':{k:'lph',lbl:'Fuel rate',u:'L/h',f:(a,b)=>(a*256+b)/20,d:1},
+  '0E':{k:'timing',lbl:'Timing adv.',u:'°',f:a=>a/2-64,d:1},
+  '06':{k:'stft',lbl:'Short fuel trim',u:'%',f:a=>(a-128)*100/128,d:1,warn:v=>Math.abs(v)>15},
+  '07':{k:'ltft',lbl:'Long fuel trim',u:'%',f:a=>(a-128)*100/128,d:1,warn:v=>Math.abs(v)>10,slow:1},
+  '42':{k:'ecuV',lbl:'ECU voltage',u:'V',f:(a,b)=>(a*256+b)/1000,d:2,warn:v=>v<12.2||v>14.9,slow:1},
+  '2F':{k:'fuel',lbl:'Fuel level',u:'%',f:a=>a*100/255,d:0,warn:v=>v<12,slow:1},
+  // diesel aftertreatment (only on cars built to newer OBD revisions)
+  '78':{k:'egt',lbl:'Exhaust temp',u:'°C',f:(a,b,x)=>x.length>=3&&(x[0]&1)?t16(x,1)/10-40:NaN,d:0},
+  '7C':{k:'dpfT',lbl:'DPF inlet temp',u:'°C',f:(a,b,x)=>x.length>=3&&(x[0]&1)?t16(x,1)/10-40:NaN,d:0,warn:v=>v>550},
+  '73':{k:'exhP',lbl:'Exhaust pressure',u:'kPa',f:(a,b,x)=>x.length>=3&&(x[0]&1)?t16(x,1)/100:NaN,d:2,slow:1},
+  '7A':{k:'dpfDp',lbl:'DPF Δ pressure',u:'kPa',f:(a,b,x)=>x.length>=3&&(x[0]&1)?(t16(x,1)<<16>>16)/100:NaN,d:2,slow:1},
+  '8B':{k:'regen8b',f:(a,b,x)=>x.length>=2&&(x[0]&1)?(x[1]&1):NaN,slow:1},
+};
+const EXTRA = [
+  {k:'boost',lbl:'Boost',u:'bar',d:2,pid:'0B'},
+  {k:'cons',lbl:'Consumption',u:'L/100km',d:1,pid:'5E'},
+  {k:'batt',lbl:'Battery (adapter)',u:'V',d:1},
+];
+const TILE_ORDER = ['coolant','oil','boost','rail','load','lph','cons','maf','map','dpfT','egt','dpfDp','exhP','iat','amb','ecuV','batt','fuel','throttle','timing','stft','ltft','baro'];
+
+// ---------- car profiles ----------
+const MOD_E = [[0x12,'DDE · engine'],[0x18,'EGS · automatic gearbox'],[0x29,'DSC · ABS / stability'],[0x01,'MRS · airbags'],[0x40,'CAS · key / immobiliser'],[0x00,'JBE · junction box'],[0x60,'KOMBI · instrument cluster'],[0x72,'FRM · footwell / lights'],[0x78,'IHKA · climate'],[0x02,'SZL · steering column'],[0x63,'Head unit'],[0x64,'PDC · parking sensors']];
+const MOD_F = [[0x10,'ZGM · gateway'],[0x12,'DDE · engine'],[0x18,'EGS · automatic gearbox'],[0x29,'DSC · ABS / stability'],[0x01,'ACSM · airbags'],[0x30,'EPS · power steering'],[0x40,'FEM / BDC · body'],[0x56,'FZD · roof functions'],[0x5D,'KAFAS · camera'],[0x60,'KOMBI · instrument cluster'],[0x63,'Head unit'],[0x64,'PDC · parking sensors'],[0x72,'FRM · lights'],[0x78,'IHKA · climate']];
+const CARS = { e87:{dpf:'n47',mods:MOD_E}, f20n47:{dpf:'n47',mods:MOD_F}, b47:{dpf:'b47',mods:MOD_F} };
+const car = ()=>CARS[$('car').value];
+try{ const c=localStorage.getItem('obdCar'); if(c&&CARS[c]) $('car').value=c; }catch(e){}
+$('car').onchange=()=>{ try{localStorage.setItem('obdCar',$('car').value)}catch(e){} resetBmwWatch(); };
+
+// N47 DDE measurement identifiers (community research, torque-bhp.com; scaling not published)
+const N47_DPF=[['05AA','Regeneration status','status'],['0404','Regeneration requested','request'],['03EA','Soot mass','soot'],['03E9','Ash mass'],['03EB','Distance since last regen','dist'],['0408','Time since last regen'],['0407','Successful regenerations','count'],['0434','Temperature before DPF'],['043C','DPF differential pressure','dp'],['043A','DPF differential pressure (measured)'],['0420','Exhaust back pressure before DPF','backp'],['0432','Absolute pressure before DPF'],['03F3','Average regen interval'],['0BA4','Remaining DPF life']];
+
+const state = {}, stateTs = {}; const supported = new Set();
+let elm=null, running=false, isCan=true, recording=false, rec=[], hist=[], expert=false;
+
+// ---------- UI build ----------
+function gaugeSVG(max, ticks, redFrom){
+  let t='';
+  for(let i=0;i<=ticks;i++){
+    const ang=(-225+270*i/ticks)*Math.PI/180, r1=88, r2=i%2?82:78;
+    const x1=100+r1*Math.cos(ang), y1=100+r1*Math.sin(ang), x2=100+r2*Math.cos(ang), y2=100+r2*Math.sin(ang);
+    const lx=100+66*Math.cos(ang), ly=100+66*Math.sin(ang);
+    t+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#3a4450" stroke-width="2"/>`;
+    if(i%2===0) t+=`<text x="${lx}" y="${ly+4}" fill="#7d8894" font-size="10" text-anchor="middle">${Math.round(max*i/ticks/(max>1000?1000:1))}</text>`;
+  }
+  const arc='M 37.8 162.2 A 88 88 0 1 1 162.2 162.2';
+  const red = redFrom? `<path d="${arc}" pathLength="100" fill="none" stroke="#5a2326" stroke-width="10" stroke-dasharray="0 ${redFrom/max*100} 100"/>`:'';
+  return `<svg viewBox="0 0 200 175">
+    <path d="${arc}" pathLength="100" fill="none" stroke="#1f252d" stroke-width="10"/>${red}
+    <path class="fg" d="${arc}" pathLength="100" fill="none" stroke="url(#gr${max})" stroke-width="10" stroke-linecap="round" stroke-dasharray="0 100"/>
+    <defs><linearGradient id="gr${max}" x1="0" x2="1"><stop offset="0" stop-color="#1c69d4"/><stop offset="1" stop-color="#4fa3ff"/></linearGradient></defs>${t}</svg>`;
+}
+function makeGauge(el,max,ticks,unit,redFrom){
+  el.innerHTML=gaugeSVG(max,ticks,redFrom)+`<div class="read"><div class="val">—</div><div class="unit">${unit}</div></div>`;
+  return {set(v){ el.querySelector('.val').textContent = v==null||isNaN(v)?'—':Math.round(v);
+    el.querySelector('.fg').setAttribute('stroke-dasharray', `${Math.max(0,Math.min(100,(v||0)/max*100))} 100`);}};
+}
+const gSpeed = makeGauge($('gSpeed'),240,12,'km/h');
+const gRpm = makeGauge($('gRpm'),6000,12,'rpm · ×1000 on dial',4500);
+
+const tileDefs = {}; Object.entries(PIDS).forEach(([p,d])=>d.lbl&&(tileDefs[d.k]={...d,pid:p})); EXTRA.forEach(e=>tileDefs[e.k]=e);
+$('tiles').innerHTML = TILE_ORDER.map(k=>`<div class="tile na" id="t_${k}"><div class="lbl">${tileDefs[k].lbl}</div><div class="v">—<small>${tileDefs[k].u}</small></div></div>`).join('');
+function setTile(k,v){
+  const el=$('t_'+k), d=tileDefs[k]; if(!el) return;
+  if(v==null||isNaN(v)){ el.classList.add('na'); el.querySelector('.v').innerHTML=`—<small>${d.u}</small>`; return; }
+  el.className='tile'+(d.bad&&d.bad(v)?' bad':d.warn&&d.warn(v)?' warn':'');
+  el.querySelector('.v').innerHTML=`${v.toFixed(d.d)}<small>${d.u}</small>`;
+}
+function hideUnsupported(){ TILE_ORDER.forEach(k=>{ const p=tileDefs[k].pid; $('t_'+k).style.display = p&&!supported.has(p)?'none':''; }); }
+
+function setStatus(t,cls){ const s=$('status'); s.textContent=t; s.className='pill '+(cls||''); }
+function log(dir,txt){ const l=$('log'); l.textContent += (dir+' '+txt.replace(/\r/g,'⏎')+'\n'); if(l.textContent.length>20000) l.textContent=l.textContent.slice(-15000); l.scrollTop=l.scrollHeight; }
+
+// ---------- Transports ----------
+const BLE_SERVICES=[0xfff0,0xffe0,0x18f0,0xffe5,'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
+async function bleTransport(){
+  const dev = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:BLE_SERVICES});
+  const gatt = await dev.gatt.connect();
+  let wr=null, nt=null;
+  for(const s of await gatt.getPrimaryServices()){
+    for(const c of await s.getCharacteristics()){
+      if(!nt && (c.properties.notify||c.properties.indicate)) nt=c;
+      if(!wr && (c.properties.write||c.properties.writeWithoutResponse)) wr=c;
+    }
+    if(wr&&nt) break;
+  }
+  if(!wr||!nt) throw new Error('No ELM327 serial characteristic found on this device');
+  const t={name:dev.name||'BLE adapter', onData:null,
+    async write(s){ const b=new TextEncoder().encode(s);
+      for(let i=0;i<b.length;i+=20){ const chunk=b.slice(i,i+20);
+        if(wr.properties.writeWithoutResponse && wr.writeValueWithoutResponse) await wr.writeValueWithoutResponse(chunk); else await wr.writeValue(chunk);} },
+    async close(){ try{gatt.disconnect()}catch(e){} }};
+  nt.addEventListener('characteristicvaluechanged',e=>t.onData&&t.onData(new TextDecoder().decode(e.target.value)));
+  await nt.startNotifications();
+  dev.addEventListener('gattserverdisconnected',()=>{ if(running){ setStatus('Connection lost','err'); stop(); } });
+  return t;
+}
+async function serialTransport(){
+  const port = await navigator.serial.requestPort({allowedBluetoothServiceClassIds:['00001101-0000-1000-8000-00805f9b34fb']}).catch(()=>navigator.serial.requestPort());
+  await port.open({baudRate:38400});
+  const writer=port.writable.getWriter(); const reader=port.readable.getReader(); let open=true;
+  const t={name:'Serial adapter', onData:null,
+    write:s=>writer.write(new TextEncoder().encode(s)),
+    async close(){ open=false; try{await reader.cancel()}catch(e){} try{reader.releaseLock();writer.releaseLock();await port.close()}catch(e){} }};
+  (async()=>{ const dec=new TextDecoder(); try{ while(open){ const {value,done}=await reader.read(); if(done)break; t.onData&&t.onData(dec.decode(value)); } }catch(e){ if(open){setStatus('Connection lost','err'); stop();} } })();
+  return t;
+}
+
+// Simulated E87 118d (N47) with a DPF regeneration every 4 minutes (from 0:40 to 2:10)
+function demoTransport(){
+  const t0=performance.now(), secs=()=>(performance.now()-t0)/1000;
+  const regenOn=()=>{ const c=secs()%240; return c>40&&c<130; };
+  const sim=()=>{ const s=secs(), on=regenOn();
+    const speed=Math.max(0,55+45*Math.sin(s/12)+8*Math.sin(s/2.7));
+    const gear=speed<18?1:speed<35?2:speed<55?3:speed<80?4:speed<105?5:6;
+    const rpm=speed<2?(on?1000:800):Math.min(4500,800+speed*[0,72,44,31,25,21,18][gear]);
+    const thr=Math.max(0,Math.min(100,20+40*Math.cos(s/12)+10*Math.sin(s/1.3)));
+    return {speed,rpm,thr,on,load:thr*0.8+10,maf:rpm*(thr+25)/1400,map:100+thr*1.3,cool:Math.min(88,40+s*2),
+      lph:speed<2?(on?1.2:0.7):0.8+thr*0.11+(on?1.1:0),rail:300+thr*14,dpfT:on?585+Math.random()*25:180+speed*2.2,dp:2+speed/30};};
+  const h=(n,b=1)=>{n=Math.max(0,Math.round(n)); return b===2?[(n>>8)&255,n&255].map(hx).join(' '):hx(n&255);};
+  const sup=Object.keys(PIDS).filter(p=>!['8B','0E','06','07','5C','7A'].includes(p));
+  const mask=base=>{ let m=0n; for(let i=1;i<=32;i++){ const p=hx(base+i); if(sup.includes(p)||(i===32&&base<0xA0)) m|=1n<<BigInt(32-i);} return m.toString(16).padStart(8,'0').match(/../g).join(' ');};
+  let dHdr='7DF', dPend=[], dCaf=true, dCea=null, dEcho=true, dH1=false;
+  const MODS={'12':[[0x4B,0x93,0x24]],'18':[],'29':[[0x5E,0x20,0x24]],'40':[],'60':[[0x93,0x0B,0x20]],'72':[],'00':[]};  // E-series: 2-byte code + status
+  const demoUds=cmd=>{ const A=cmd.slice(0,2), b=bytesOf(cmd.slice(2)), dtcs=MODS[A]; if(!dtcs) return 'NO DATA';
+    const id='6'+A+'F1', H=a=>a.map(hx).join('');
+    if(b[0]===0x30){ const r=dPend.join('\r'); dPend=[]; return r||'NO DATA'; }
+    const q=b.slice(1,1+(b[0]&15)); let p; const s=secs(), c=s%240, on=regenOn(), v=sim();
+    if(q[0]===0x3E) p=[0x7E,0];
+    else if(q[0]===0x1A&&q[1]===0x90&&A==='12') p=[0x5A,0x90,...[...'WBAUF31070PZ12345'].map(ch=>ch.charCodeAt(0))];
+    else if(q[0]===0x19) p=[0x7F,0x19,0x11];                       // E-series: no UDS fault service
+    else if(q[0]===0x18) p=[0x58,dtcs.length,...dtcs.flat()];
+    else if(q[0]===0x2C&&q[1]===0x10&&A==='12'){
+      const sinceEnd=c>=130?c-130:c+110, k=hx(q[2])+hx(q[3]);
+      const vals={'05AA':on?4:0,'0404':(on||c>30&&c<=40)?1:0,'03EA':Math.round((on?18-(c-40)/90*15:3+sinceEnd/150*15)*100),'03E9':2350,
+        '03EB':Math.round(sinceEnd*5),'0408':Math.round(sinceEnd*6),'0407':412+Math.floor(s/240)+(c>=130?1:0),
+        '0434':Math.round((v.dpfT+273.15)*10),'043C':Math.round(v.dp*100),'043A':Math.round(v.dp*100+7),'0420':Math.round((v.dp*1.3+2)*100),'0432':Math.round((101+v.dp*1.3+2)*10),'03F3':418,'0BA4':14888};
+      p = k in vals ? [0x6C,0x10,(vals[k]>>8)&255,vals[k]&255] : [0x7F,0x2C,0x31]; }
+    else if(q[0]===0x2C) p=[0x7F,0x2C,0x11];
+    else if(q[0]===0x22) p=[0x7F,0x22,0x11];
+    else p=[0x7F,q[0],0x11];
+    if(p.length<=6) return id+H([p.length,...p]);
+    for(let i=5,sq=1;i<p.length;i+=6,sq++) dPend.push(id+H([0x20|(sq&15),...p.slice(i,i+6)]));
+    return id+H([0x10|(p.length>>8),p.length&255,...p.slice(0,5)]); };
+  const t={name:'Demo (simulated)', onData:null, async close(){},
+    async write(cmd){ cmd=cmd.trim().toUpperCase(); const v=sim(); let r='OK'; const echo=dEcho?cmd+'\r':'';
+      if(cmd==='ATZ') dEcho=true; if(cmd==='ATE0') dEcho=false; if(cmd==='ATE1') dEcho=true;
+      if(cmd.startsWith('ATH')) dH1=cmd==='ATH1';
+      if(cmd.startsWith('ATSH')) dHdr=cmd.slice(4);
+      if(cmd.startsWith('ATCAF')) dCaf=cmd.slice(5)==='1';
+      if(cmd.startsWith('ATCEA')) dCea=cmd.slice(5)||null;
+      if(!dCaf && dHdr!=='6F1' && /^[0-9A-F]{16}$/.test(cmd)) cmd=cmd.slice(2,2+2*parseInt(cmd.slice(0,2),16));   // raw OBD frame → plain request
+      if(dHdr==='6F1' && /^([0-9A-F]{2})+$/.test(cmd)){
+        let out;
+        if(!dCaf) out = cmd.length===16 ? demoUds(cmd) : 'NO DATA';            // like real BMW modules: short frames are ignored
+        else if(dCea){ out=demoUds(dCea+hx(cmd.length/2)+cmd); if(dPend.length){ out+='\r'+dPend.join('\r'); dPend=[]; } }
+        else out='NO DATA';
+        setTimeout(()=>t.onData&&t.onData(echo+out+'\r\r>'),40); return; }
+      if(cmd==='STI') r='?';
+      else if(cmd==='ATZ'||cmd==='ATI') r='ELM327 v1.5'; else if(cmd==='ATRV') r=(13.9+Math.random()*.2).toFixed(1)+'V';
+      else if(cmd==='ATDPN') r='A6';
+      else if(['0100','0120','0140','0160','0180','01A0'].includes(cmd)) r='41 '+cmd.slice(2)+' '+mask(parseInt(cmd.slice(2),16));
+      else if(cmd==='0902') r='NO DATA';
+      else if(cmd==='03') r='43 01 04 01 00 00 00';
+      else if(cmd==='04') r='44';
+      else if(cmd.startsWith('01')){ const p=cmd.slice(2), m={
+        '0C':h(v.rpm*4,2),'0D':h(v.speed),'05':h(v.cool+40),'0F':h(28+40),'46':h(17+40),'11':h(v.thr*2.55),
+        '04':h(v.load*2.55),'10':h(v.maf*100,2),'0B':h(v.map),'33':h(101),'42':h(13950,2),'2F':h(158),
+        '23':h(v.rail*10,2),'5E':h(v.lph*20,2),'7C':'01 '+h((v.dpfT+40)*10,2)+' 00 00 00 00 00 00','78':'01 '+h((v.dpfT+30+40)*10,2)+' 00 00 00 00 00 00'};
+        r=m[p]&&sup.includes(p)?`41 ${p} ${m[p]}`:'NO DATA'; }
+      if(dH1 && /^4[1-9A-F] /.test(r)) r='7E8 '+hx(r.split(' ').length)+' '+r;     // headers on: CAN id + length byte
+      setTimeout(()=>t.onData&&t.onData(echo+r+'\r\r>'), 25+Math.random()*25); }};
+  return t;
+}
+
+// ---------- ELM327 protocol ----------
+class ELM{
+  constructor(tr){ this.tr=tr; this.buf=''; this.q=Promise.resolve(); this.pend=null;
+    tr.onData=d=>{ this.buf+=d; if(this.pend && this.buf.includes('>')){ let out=this.buf.slice(0,this.buf.indexOf('>')); this.buf=''; const p=this.pend; this.pend=null; clearTimeout(p.to); log('←',out.trim());
+      // strip the command echo if the adapter still has echo on
+      const ls=out.replace(/^[\r\n]+/,'').split(/\r\n|\r|\n/), norm=s=>s.replace(/\s/g,'').toUpperCase();
+      if(ls.length>1 && norm(ls[0])===norm(p.cmd)) out=ls.slice(1).join('\r');
+      p.res(out);} }; }
+  send(cmd,timeout=3000){
+    const job=()=>new Promise((res,rej)=>{ this.buf=''; this.pend={res,cmd,to:setTimeout(()=>{ this.pend=null; res('TIMEOUT'); },timeout)}; log('→',cmd); this.tr.write(cmd+'\r').catch(rej); });
+    const p=this.q.then(job,job); this.q=p.catch(()=>{}); return p;
+  }
+}
+function messages(raw){
+  const lines=raw.toUpperCase().split(/[\r\n]+/).map(l=>l.replace(/\s/g,'')).filter(l=>l && !/^(SEARCHING|BUSINIT|OK)/.test(l.replace(/\./g,'')));
+  const out=[]; let cur=null;
+  for(const l of lines){
+    if(/^[0-9A-F]{3}$/.test(l)){ cur=''; out.push(cur); continue; }
+    const m=l.match(/^[0-9A-F]:(.*)$/);
+    if(m && cur!==null){ out[out.length-1]+=m[1]; continue; }
+    cur=null; out.push(l);
+  }
+  return out.filter(Boolean);
+}
+function pidBytes(raw,pid){
+  if(/NODATA|ERROR|UNABLE|STOPPED|\?|TIMEOUT/.test(raw.replace(/\s/g,'').toUpperCase())) return null;
+  const msg=messages(raw).find(m=>m.startsWith('41'+pid)); return msg?bytesOf(msg.slice(4)):null;
+}
+
+async function init(){
+  setStatus('Initialising…');
+  await elm.send('ATZ',5000); await sleep(1500);
+  for(let i=0;i<4;i++){ const r=await elm.send('ATE0',2000); if(/OK/.test(r)) break; await sleep(700); }   // some clones need a moment after reset
+  const id=(await elm.send('ATI')).trim();
+  for(const c of ['ATL0','ATS0','ATH0','ATAT1','ATSP0']) await elm.send(c);
+  setStatus('Searching for ECU…');
+  supported.clear(); let base=0;
+  while(base<=0xA0){
+    const p=hx(base);
+    const raw=await elm.send('01'+p, base===0?15000:4000);
+    const msgs=messages(raw).filter(m=>m.startsWith('41'+p)); if(!msgs.length){ if(base===0) throw new Error('No response from car ECU — ignition on?'); break; }
+    let mask=0; msgs.forEach(m=>{ const b=bytesOf(m.slice(4,12)); mask|=((b[0]<<24)|(b[1]<<16)|(b[2]<<8)|b[3])>>>0; }); mask>>>=0;
+    for(let i=1;i<=32;i++) if(mask & (1<<(32-i))>>>0) supported.add(hx(base+i));
+    if(!supported.has(hx(base+0x20))) break;
+    base+=0x20;
+  }
+  const dpm=(await elm.send('ATDPN')).trim().match(/A?([0-9A-C])\s*$/i), dp=dpm?dpm[1].toUpperCase():'?'; isCan=/^[6-9AB]$/.test(dp);
+  const protoName={1:'J1850 PWM',2:'J1850 VPW',3:'ISO 9141-2',4:'KWP2000 5-baud',5:'KWP2000 fast',6:'CAN 11-bit 500k',7:'CAN 29-bit 500k',8:'CAN 11-bit 250k',9:'CAN 29-bit 250k'}[dp]||dp;
+  let vin='—'; try{ const m=messages(await elm.send('0902',5000)).find(x=>x.startsWith('4902'));
+    if(m){ vin=String.fromCharCode(...bytesOf(m.slice(4)).filter(b=>b>=48&&b<=90)).slice(-17)||'—'; } }catch(e){}
+  $('info').textContent=`Adapter: ${elm.tr.name} (${id.split(/\r|\n/).filter(Boolean).pop()||'ELM327'}) · Protocol: ${protoName} · VIN: ${vin} · ${supported.size} PIDs supported`;
+  hideUnsupported();
+}
+
+// ---------- Poll loop ----------
+async function loop(){
+  const fast=Object.entries(PIDS).filter(([p,d])=>!d.slow&&supported.has(p)).map(([p])=>p);
+  const slow=Object.entries(PIDS).filter(([p,d])=>d.slow&&supported.has(p)).map(([p])=>p);
+  let cycle=0, si=0, last=performance.now(), rate=0;
+  while(running){
+    const list=[...fast]; if(slow.length) list.push(slow[si++%slow.length]);
+    for(const p of list){ if(!running) return;
+      while(expert&&running){ await sleep(100); last=performance.now(); }
+      if(!running) return;
+      const b=pidBytes(await elm.send('01'+p),p); if(b&&b.length){ state[PIDS[p].k]=PIDS[p].f(b[0],b[1]||0,b); stateTs[PIDS[p].k]=Date.now(); } }
+    if(cycle%15===0 && !expert){ const v=parseFloat(await elm.send('ATRV')); if(!isNaN(v)) state.batt=v; }
+    derive(); render(); cycle++;
+    const now=performance.now(); rate=rate*0.8+0.2*(1000/(now-last)); last=now; $('hz').textContent=rate.toFixed(1)+' updates/s';
+  }
+}
+function derive(){
+  state.boost = state.map!=null ? (state.map-(state.baro??101))/100 : null;
+  state.cons = state.lph!=null && !isNaN(state.lph) && state.speed>3 ? state.lph/state.speed*100 : null;
+}
+function render(){
+  gSpeed.set(state.speed); gRpm.set(state.rpm);
+  TILE_ORDER.forEach(k=>setTile(k,state[k]));
+  const t=Date.now(); hist.push({t,s:state.speed||0,r:state.rpm||0}); hist=hist.filter(h=>t-h.t<60000);
+  drawChart(); updateRegen();
+  if(recording){
+    const st=bmw.list.find(w=>w.role==='status');
+    rec.push({time:new Date(t).toISOString(),...Object.fromEntries(Object.entries(state).map(([k,v])=>[k,v==null||isNaN(v)?'':+v.toFixed(3)])),
+      regen: regenNow===true?1:regenNow===false?0:'', regen_source: regenSrc, bmw_regen_status: st&&st.num!=null?st.num:'',
+      ...Object.fromEntries(bmw.list.map(w=>['bmw_'+w.label.toLowerCase().replace(/[^a-z0-9]+/g,'_'), w.num??'']))});
+    $('recInfo').textContent=rec.length+' samples'; }
+}
+function drawChart(){
+  const c=$('chart'), dpr=devicePixelRatio||1, w=c.clientWidth, h=c.clientHeight;
+  if(c.width!==w*dpr){ c.width=w*dpr; c.height=h*dpr; }
+  const x=c.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,w,h);
+  x.strokeStyle='#1f252d'; x.lineWidth=1; for(let i=1;i<4;i++){ x.beginPath(); x.moveTo(0,h*i/4); x.lineTo(w,h*i/4); x.stroke(); }
+  const now=Date.now();
+  const line=(key,max,col)=>{ x.strokeStyle=col; x.lineWidth=2; x.beginPath();
+    hist.forEach((p,i)=>{ const px=w-(now-p.t)/60000*w, py=h-4-(p[key]/max)*(h-8); i?x.lineTo(px,py):x.moveTo(px,py); }); x.stroke(); };
+  line('s',200,'#4fa3ff'); line('r',5000,'#f5a623');
+}
+
+// ---------- Standard DTCs ----------
+function decodeDtc(a,b){ return 'PCBU'[a>>6]+((a>>4)&3)+(a&15).toString(16).toUpperCase()+hx(b); }
+async function readDtcs(){
+  const raw=await elm.send('03',6000); const codes=new Set();
+  for(const m of messages(raw).filter(m=>m.startsWith('43'))){
+    let b=bytesOf(m.slice(2)); if(isCan) b=b.slice(1,1+2*b[0]);
+    for(let i=0;i+1<b.length;i+=2) if(b[i]||b[i+1]) codes.add(decodeDtc(b[i],b[i+1]));
+  }
+  $('dtcs').innerHTML = codes.size ? [...codes].map(c=>`<div class="dtc"><b>${c}</b><a href="https://www.google.com/search?q=BMW+118d+${c}" target="_blank" rel="noopener" style="color:var(--accent2)">look up</a></div>`).join('')
+    : '<span style="color:var(--ok)">No stored fault codes.</span>';
+}
+
+// ---------- BMW direct access (read-only) ----------
+const READ_SERVICES={0x22:'read data',0x21:'read local data',0x1A:'read ECU id',0x19:'read faults',0x18:'read faults (E-series)',0x2C:'BMW measurement read',0x3E:'tester present'};
+const NRC={0x10:'general reject',0x11:'service not supported',0x12:'sub-function not supported',0x13:'wrong length',0x22:'conditions not correct',0x31:'unknown identifier',0x33:'security access denied',0x7E:'not supported in this session',0x7F:'not supported in this session'};
+const nrc=p=>'refused: '+(NRC[p[2]]||'code 0x'+hx(p[2]));
+function xout(html){ const o=$('xout'); o.innerHTML+=html+'\n'; o.scrollTop=o.scrollHeight; }
+
+// Two ways to address a BMW module:
+//  raw — we build every CAN frame ourselves (target address + ISO-TP), padded to 8 bytes
+//  cea — the adapter adds the target address (ATCEA) and does the ISO-TP framing
+let lastCra=null, lastCea=null, bmwMode='raw', bmwChecked=false;
+const pad8=a=>{ const b=a.slice(); while(b.length<8) b.push(0); return b; };
+async function bmwSetup(){
+  for(const c of [bmwMode==='cea'?'ATCAF1':'ATCAF0','ATH1','ATSH6F1','ATST32']){ const r=await elm.send(c); if(/\?/.test(r)) throw new Error(c+' is not supported by this adapter'); }
+  if(bmwMode==='raw' && lastCea!==null){ await elm.send('ATCEA'); lastCea=null; }
+}
+async function restoreObd(){ lastCra=null; if(lastCea!==null) await elm.send('ATCEA'); lastCea=null; for(const c of ['ATAR','ATSH7DF','ATH0','ATCAF1','ATST32']) await elm.send(c); }
+
+// "Are you there?" requests: UDS tester present, KWP2000 read-ECU-id, KWP tester present. Any reply (even a refusal) counts.
+const PROBES=[[0x3E,0x00],[0x1A,0x80],[0x3E,0x01]];
+async function probe(a){ for(const q of PROBES){ const r=await uds(a,q); if(r) return {r,q}; } return null; }
+async function detectMethod(report, ceaOk=true){
+  bmwChecked=true;
+  for(const m of ['raw','cea']){
+    if(m==='cea'&&!ceaOk){ if(report) xout('– Method B skipped: adapter has no ATCEA'); continue; }
+    bmwMode=m; lastCra=null; await bmwSetup();
+    const hit=await probe(0x12);
+    if(report) xout(`${hit?'<span class="ok">✓</span>':'<span class="no">✗</span>'} Method ${m==='raw'?'A · raw frames padded to 8 bytes':'B · adapter extended addressing (ATCEA)'}: ${hit?'engine module answered':'no reply to '+PROBES.map(hexs).join(' / ')}`);
+    if(hit) return {m,hit};
+  }
+  bmwMode='raw'; lastCra=null; await bmwSetup(); return null;
+}
+
+// One BMW request/response
+async function uds(addr,req){
+  const A=hx(addr); if(lastCra!==A){ await elm.send('ATCRA6'+A); lastCra=A; }
+  if(bmwMode==='cea' && lastCea!==A){ await elm.send('ATCEA'+A); lastCea=A; }
+  const grab=async cmd=>{ const raw=await elm.send(cmd,5000);
+    return raw.toUpperCase().split(/[\r\n]+/).map(l=>l.replace(/\s/g,'')).filter(l=>l.startsWith('6'+A+'F1')).map(l=>bytesOf(l.slice(5))); };
+  let res=null, buf=null, need=0, pending=false;
+  const feed=f=>{ const t=f[0]>>4;
+    if(t===0){ const p=f.slice(1,1+(f[0]&15)); if(p[0]===0x7F&&p[2]===0x78){ pending=true; return; } res=p; }
+    else if(t===1){ need=((f[0]&15)<<8)|f[1]; buf=f.slice(2); }
+    else if(t===2&&buf){ buf.push(...f.slice(1)); if(buf.length>=need){ res=buf.slice(0,need); buf=null; } } };
+  if(bmwMode==='cea') (await grab(req.map(hx).join(''))).forEach(feed);     // adapter adds address, length and flow control
+  else {
+    (await grab(pad8([addr,req.length,...req]).map(hx).join(''))).forEach(feed);
+    if(buf&&!res) (await grab(pad8([addr,0x30,0,0]).map(hx).join(''))).forEach(feed);   // flow control: send the rest
+  }
+  if(res) return {p:res,partial:false};
+  if(buf) return {p:buf,partial:true};
+  return pending?{p:null,pending:true}:null;
+}
+
+// one expert job at a time; live polling pauses meanwhile
+let xlock=Promise.resolve();
+function withExpert(fn){
+  const p=xlock.then(async()=>{ if(!elm) return; expert=true;
+    try{ await bmwSetup(); if(!bmwChecked && fn!==checkAdapter) await detectMethod(false); return await fn(); }
+    finally{ try{ if(elm) await restoreObd(); }catch(e){} expert=false; } });
+  xlock=p.catch(()=>{}); return p;
+}
+const XBTNS=['btnCheck','btnScan','btnSend','btnSweep'];
+async function runExpert(fn){
+  if(!elm) return;
+  XBTNS.forEach(b=>$(b).disabled=true);
+  setStatus('Expert mode · gauges paused','on');
+  try{ await withExpert(fn); } catch(e){ xout('<span class="no">Error:</span> '+esc(e.message||e)); }
+  finally{ if(running) setStatus('Live','on'); XBTNS.forEach(b=>$(b).disabled=!elm); $('btnWatchFound').disabled=!(elm&&found.length); }
+}
+
+async function checkAdapter(){
+  $('xout').innerHTML='';
+  await restoreObd();
+  const id=(await elm.send('ATI')).trim(), dev=(await elm.send('AT@1')).trim(), st=(await elm.send('STI')).trim();
+  xout(`<b>Adapter:</b> ${esc(id)}${/\?|^OK$/.test(dev)?'':' · '+esc(dev)}${/\?|NO DATA|^OK$/.test(st)?'':' · STN chip: '+esc(st)}`);
+  let core=true, ceaOk=false;
+  for(const [c,what,need] of [['ATCAF0','raw CAN frames',1],['ATH1','show message headers',1],['ATSH6F1','use BMW tester ID',1],['ATCRA612','listen to one module',1],['ATCEA','extended addressing (method B)',0]]){
+    const ok=!/\?/.test(await elm.send(c)); if(!ok&&need) core=false; if(c==='ATCEA') ceaOk=ok;
+    xout(`${ok?'<span class="ok">✓</span>':need?'<span class="no">✗</span>':'–'} ${c} · ${what}${ok?'':' — not supported'}`);
+  }
+  if(!isCan) xout('<span class="no">✗</span> The car answered on a non-CAN protocol; BMW direct access needs CAN (E-series from 03/2007 have it).');
+  if(!core){ xout('\n<b>Verdict:</b> <span class="no">this adapter is missing commands BMW access needs.</span>'); return; }
+
+  // Do the commands really work? Clean state first, then a standard RPM request the engine always answers, sent three ways.
+  xout('\n<b>Does the adapter really do what it says?</b>');
+  await elm.send('ATAR'); lastCra=null;
+  const hit=r=>{ const l=r.split(/[\r\n]+/).map(s=>s.replace(/\s/g,'').toUpperCase()).find(s=>/^[0-9A-F]{3}.*410C/.test(s)); return l?l.slice(0,3):null; };
+  const one=r=>esc(r.replace(/[\r\n]+/g,' ⏎ ')||'(nothing)');
+  const tst=async(label,setup,cmd)=>{ for(const c of setup) await elm.send(c); const r=(await elm.send(cmd,4000)).trim(), h=hit(r);
+    xout(`${h?'<span class="ok">✓</span>':'<span class="no">✗</span>'} ${label} · ${h?'engine answered from '+h:'no answer'}  (${one(r)})`); return h; };
+  const h0=await tst('Baseline → 7DF 01 0C (normal request, headers shown)',['ATH1','ATCAF1','ATSH7DF'],'010C');
+  const h1=await tst('Custom header → 7E0 01 0C',['ATSH7E0'],'010C');
+  const h2=await tst('Raw frame → 7DF 02 01 0C 00 00 00 00 00',['ATSH7DF','ATCAF0'],'02010C0000000000');
+  let adapterNote='';
+  if(!h0) adapterNote='<span class="chg">→ Inconclusive: even the normal request got no answer here. Is the ignition on (dash lights on)?</span>';
+  else if(!h1) adapterNote='<span class="no">→ The adapter ignores custom headers (ATSH) even though it says OK, so BMW access can’t work with it.</span>';
+  else if(!h2) adapterNote='<span class="no">→ The adapter says OK to ATCAF0 but doesn’t really send raw frames, so method A can’t work with it.</span>';
+  else adapterNote='<span class="ok">→ The adapter handles headers and raw frames correctly.</span>';
+  xout(adapterNote);
+
+  xout('\n<b>BMW access</b>');
+  const d=await detectMethod(true, ceaOk);
+  if(!d){
+    // Same request with no receive filter: show whatever comes back from any CAN id
+    bmwMode='raw'; await elm.send('ATCAF0'); await elm.send('ATCEA'); lastCea=null; await elm.send('ATAR'); lastCra=null;
+    const fr=pad8([0x12,0x02,0x1A,0x80]), raw=(await elm.send(fr.map(hx).join(''),5000)).trim();
+    const lines=raw.split(/[\r\n]+/).map(s=>s.trim()).filter(Boolean);
+    const real=lines.filter(l=>/^[0-9A-F\s]{6,}$/i.test(l) && l.replace(/\s/g,'').toUpperCase()!==fr.map(hx).join(''));
+    xout(`– Unfiltered test → 6F1 ${hexs(fr)}\n   ← ${esc(lines.join(' ⏎ ')||'(nothing)')}`);
+    xout(real.length ? '<span class="chg">!</span> Something answered without the filter — the adapter’s ATCRA filter is likely broken.'
+                     : '– Nothing on the bus answered at all.');
+    xout(`– ${esc($('info').textContent)}`);
+    const cause = !h0 ? 'The baseline test failed too, so this run is inconclusive. Try again with the dash lights on, or with the engine running.'
+      : !h1 || !h2 ? 'The adapter itself is the problem (see the tests above). A cheap clone like this can read standard OBD but not BMW modules. An adapter with a genuine chip (vLinker, OBDLink) will work with this dashboard as is.'
+      : 'The adapter works correctly, but the car didn’t answer BMW-addressed requests. Claude needs this report to look further.';
+    xout(`\n<b>Verdict:</b> <span class="no">the engine module didn’t answer.</span> Standard OBD still works.\n${cause}\n\nPress “Copy report for Claude” and paste it in the chat.`); return; }
+  const tp=d.hit.r;
+  xout(`<span class="ok">✓</span> Engine module answered ${hexs(d.hit.q)} → ${tp.p?hexs(tp.p):'busy'}`);
+  let v=await uds(0x12,[0x22,0xF1,0x90]), how='22 F1 90';
+  if(!v||!v.p||v.p[0]!==0x62){ v=await uds(0x12,[0x1A,0x90]); how='1A 90 (E-series)'; }
+  let multi=false; const ok=v&&v.p&&(v.p[0]===0x62||v.p[0]===0x5A)&&!v.partial;
+  if(ok){ multi=true; xout(`<span class="ok">✓</span> Long multi-part reply received · VIN via ${how}: ${esc(asc(v.p.slice(v.p[0]===0x62?3:2)))}`); }
+  else if(v&&v.p&&v.p[0]===0x7F) xout(`– Engine module ${nrc(v.p)} for VIN; long replies not tested.`);
+  else xout(`<span class="no">✗</span> Long reply arrived incomplete${v&&v.p?' ('+v.p.length+' bytes)':''} — this clone may be too slow for big BMW answers.`);
+  const m=await uds(0x12,[0x2C,0x10,0x05,0xAA]);
+  if(m&&m.p&&m.p[0]===0x6C) xout(`<span class="ok">✓</span> N47 measurement read works (regeneration status raw: ${hexs(m.p.slice(2))}) — the DPF panel can watch BMW values.`);
+  else if(m&&m.p) xout(`– N47-style measurement read ${nrc(m.p)} — expected on B47 engines.`);
+  xout(`\n<b>Verdict:</b> ${multi?'<span class="ok">this adapter can talk to BMW modules directly.</span>':'<span class="ok">short BMW requests work</span>; long replies may be cut off.'}`);
+}
+
+async function readModuleFaults(a){
+  let r=await uds(a,[0x19,0x02,0x0C]);
+  if(r&&r.p&&r.p[0]===0x59){ const out=[]; for(let i=3;i+3<r.p.length;i+=4) out.push({c:r.p.slice(i,i+3).map(hx).join(''),s:r.p[i+3],uds:1}); return {codes:out,partial:r.partial}; }
+  const r2=await uds(a,[0x18,0x02,0xFF,0xFF]);            // E-series (KWP2000) fault read
+  if(r2&&r2.p&&r2.p[0]===0x58){ const out=[]; for(let i=2;i+2<r2.p.length;i+=3) out.push({c:hx(r2.p[i])+hx(r2.p[i+1]),s:r2.p[i+2]}); return {codes:out,partial:r2.partial}; }
+  const bad=r2&&r2.p?r2:r; return {err: bad&&bad.p ? nrc(bad.p) : bad&&bad.pending ? 'busy — scan again' : 'no reply to fault read'};
+}
+async function scanModules(){
+  const mods=car().mods;
+  $('scan').innerHTML='<table class="xt"><thead><tr><th>Addr</th><th>Module</th><th>Status</th><th>Fault codes</th></tr></thead><tbody></tbody></table>';
+  const tb=$('scan').querySelector('tbody');
+  let n=0,total=0;
+  for(const [a,name] of mods){
+    if(!elm) break;
+    const tr=document.createElement('tr'); tr.innerHTML=`<td class="code" style="color:var(--dim)">${hx(a)}</td><td>${name}</td><td class="meta">checking…</td><td></td>`; tb.appendChild(tr);
+    const pr=await probe(a), tp=pr&&pr.r;
+    if(!tp){ tr.cells[2].textContent='no reply'; tr.classList.add('dimrow'); continue; }
+    n++; tr.cells[2].innerHTML='<span class="ok">online</span>';
+    const f=await readModuleFaults(a);
+    if(f.err){ tr.cells[3].innerHTML=`<span class="meta">${esc(f.err)}</span>`; continue; }
+    total+=f.codes.length; const short=name.split(' ')[0];
+    tr.cells[3].innerHTML = f.codes.length
+      ? f.codes.map(d=>`<span class="code"><a href="https://www.google.com/search?q=BMW+${short}+${d.c}" target="_blank" rel="noopener">${d.c}</a></span> <span class="meta">${d.uds?(d.s&0x08?'stored':d.s&0x04?'pending':'status '+hx(d.s)):'status '+hx(d.s)}</span>`).join('<br>')+(f.partial?'<br><span class="meta">(list cut short)</span>':'')
+      : '<span class="ok">none</span>';
+  }
+  const p=document.createElement('div'); p.className='meta'; p.style.marginTop='8px';
+  p.textContent=`${n} of ${mods.length} modules answered · ${total} fault code${total===1?'':'s'}. BMW codes are hex (4 digits on E-series, 6 on F-series), as shown by INPA/ISTA; the link searches for them. Addresses are typical and may differ on your car.`;
+  $('scan').appendChild(p);
+}
+
+async function rawSend(){
+  const tgt=$('xTarget').value.trim().replace(/^0x/i,''), q=$('xReq').value.trim().toUpperCase(), s=q.replace(/\s/g,'');
+  if(!s) return;
+  if(!tgt){
+    if(s.startsWith('AT')){
+      if(/^AT(PP|MA$|MR|MT|BRD|BRT|Z$|D$|WS$|SP|TP|LP$)/.test(s)) return xout(`<span class="no">Blocked:</span> ${esc(s)} would reset or reconfigure the adapter mid-session.`);
+    } else {
+      if(!/^([0-9A-F]{2})+$/.test(s)) return xout('<span class="no">Not a valid command.</span>');
+      if(!['01','02','03','05','06','07','09','0A'].includes(s.slice(0,2))) return xout('<span class="no">Blocked:</span> only read-only OBD modes are allowed (01–03, 05–07, 09, 0A).');
+    }
+    await restoreObd();
+    xout(`→ ${esc(s)}`); const r=(await elm.send(s,6000)).trim(); xout(`← ${esc(r.replace(/\r+/g,' ⏎ '))}`); return;
+  }
+  if(!/^[0-9A-F]{1,2}$/.test(tgt)) return xout('<span class="no">Module must be a hex address like 12.</span>');
+  if(!/^([0-9A-F]{2})+$/.test(s)) return xout('<span class="no">Request must be hex bytes like 2C 10 05 AA.</span>');
+  const a=parseInt(tgt,16), req=bytesOf(s);
+  if(!READ_SERVICES[req[0]] || (req[0]===0x2C&&req[1]!==0x10)) return xout(`<span class="no">Blocked:</span> ${hexs(req.slice(0,2))} is not an allowed read request.`);
+  if(req.length>6) return xout('<span class="no">Request too long (max 6 bytes).</span>');
+  xout(`→ [${hx(a)}] ${hexs(req)}  (${READ_SERVICES[req[0]]})`);
+  const r=await uds(a,req);
+  if(!r) return xout('← no reply');
+  if(!r.p) return xout('← module busy (response pending) — try again');
+  if(r.p[0]===0x7F) return xout(`← ${hexs(r.p)}  <span class="no">${nrc(r.p)}</span>`);
+  xout(`← ${hexs(r.p)}${r.partial?'  <span class="no">(incomplete)</span>':''}\n   text: ${esc(asc(r.p))}`);
+}
+
+// ---------- DPF: BMW value watch + regeneration indicator ----------
+const bmw={mode:null,list:[],justDone:0,detected:false};
+let watching=false, regenNow=null, hotSince=0;
+function n47List(){ return N47_DPF.map(([id,label,role])=>({label,role,req:[0x2C,0x10,parseInt(id.slice(0,2),16),parseInt(id.slice(2),16)]})); }
+function resetBmwWatch(){ bmw.mode=null; bmw.list=[]; bmw.detected=false; renderWatch(); }
+async function readValue(w){
+  const r=await uds(0x12,w.req);
+  if(r&&r.p&&(r.p[0]===0x6C||r.p[0]===0x62)){
+    const v=r.p.slice(r.p[0]===0x6C?2:3), num=v.length&&v.length<=4?v.reduce((n,b)=>n*256+b,0):null;
+    w.changed = !!w.val && hexs(w.val)!==hexs(v);
+    if(w.role==='dist' && w.num!=null && num!=null && num<w.num) bmw.justDone=Date.now();
+    if(w.role==='count' && w.num!=null && num!=null && num>w.num) bmw.justDone=Date.now();
+    w.val=v; w.num=num; w.err=null; w.ts=Date.now();
+  } else { w.err = r&&r.p ? nrc(r.p) : r&&r.pending ? 'busy' : 'no reply'; w.changed=false; }
+}
+async function watchOnce(){
+  await withExpert(async()=>{
+    if(!bmw.mode) bmw.mode=car().dpf;
+    if(bmw.mode==='n47'&&!bmw.list.length) bmw.list=n47List();
+    for(const w of bmw.list){ if(!elm) return; await readValue(w); }
+  });
+  renderWatch(); updateRegen();
+}
+async function watchLoop(){
+  while(watching&&elm){
+    try{ await watchOnce(); }catch(e){ $('regenWhy').textContent='BMW read failed: '+(e.message||e); }
+    for(let i=0;i<100&&watching;i++) await sleep(100);
+  }
+}
+function setWatching(on){ watching=on&&!!elm; $('btnDpfWatch').textContent=watching?'Stop watching':'Watch BMW DPF values'; if(watching) watchLoop(); }
+function renderWatch(){
+  const el=$('dpfBmw');
+  if(bmw.mode==='b47'&&!bmw.list.length){ el.innerHTML='<div class="meta" style="margin-top:8px">B47 engine: BMW’s DPF identifiers for this engine aren’t public. Use the identifier sweep in the Expert panel, then “Watch these”, and look for values that change during a regeneration.</div>'; return; }
+  if(!bmw.list.length){ el.innerHTML=''; return; }
+  const allBad=bmw.list.every(w=>w.err);
+  el.innerHTML=`<table class="xt"><thead><tr><th>BMW value</th><th>Raw bytes</th><th>Number</th><th></th></tr></thead><tbody>${bmw.list.map(w=>
+    `<tr class="${w.changed?'changed':''}"><td>${esc(w.label)}</td><td class="code">${w.val?hexs(w.val):''}</td><td>${w.err?`<span class="meta">${esc(w.err)}</span>`:w.num??''}</td><td>${w.changed?'<span class="chg">changed</span>':''}</td></tr>`).join('')}</tbody></table>
+    <div class="meta" style="margin-top:6px">${allBad?'<span class="no">The engine module refused these identifiers — check the car selection at the top.</span> ':''}${bmw.mode==='n47'?'N47 identifiers from community research; BMW doesn’t publish the scaling, so values are raw. Watch how they move: soot mass should drop and the counters reset after a regeneration.':'Identifiers found by your sweep.'} Refreshes every 10 s; gauges pause briefly each time.</div>`;
+}
+// Every indicator considered, its value and its vote; the first signal (in priority order) with a vote decides.
+let regenSrc='', lastDecision, regenEvents=[];
+const clock=t=>new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+function ago(ts){ if(!ts) return '—'; const s=Math.max(0,Math.round((Date.now()-ts)/1000)); return s<60?s+' s ago':s<3600?Math.floor(s/60)+' min ago':Math.floor(s/3600)+' h ago'; }
+function updateRegen(){
+  const fin=v=>v!=null&&!isNaN(v), now=Date.now(), sig=[];
+  const bw=r=>bmw.list.find(w=>w.role===r);
+  const bmwVal=w=>!w?(watching?'waiting for first read…':'not watching'):w.err?w.err:(w.num??'—');
+
+  // 1 · standard OBD aftertreatment status
+  const v8 = state.regen8b===0||state.regen8b===1 ? !!state.regen8b : null;
+  sig.push({name:'Standard OBD regen status', src:'PID 8B', rule:'bit set = regenerating',
+    val: !running?'—' : !supported.has('8B')?'not reported by this car' : v8===null?'no valid data' : v8?'1 (regenerating)':'0 (idle)', vote:v8, ts:stateTs.regen8b});
+
+  // 2 · BMW engine-module regeneration status
+  const st=bw('status'), vb = st&&st.num!=null ? st.num!==0 : null;
+  sig.push({name:'BMW regeneration status', src:'DDE 2C 10 05 AA', rule:'0 = idle · other = regenerating', val:bmwVal(st), vote:vb, ts:st&&st.ts});
+
+  // 3 · exhaust / DPF temperature
+  const tk=fin(state.dpfT)?'dpfT':fin(state.egt)?'egt':null, temp=tk?state[tk]:null;
+  if(temp!=null){ if(temp>450){ if(!hotSince) hotSince=now; } else hotSince=0; }
+  const hotFor=hotSince?(now-hotSince)/1000:0;
+  const vt = temp==null ? null : hotFor>=20 ? true : temp<350 ? false : null;
+  sig.push({name:tk==='egt'?'Exhaust temperature':'DPF inlet temperature', src:tk==='egt'?'PID 78':'PID 7C', rule:'>450 °C for 20 s = regenerating · <350 °C = idle',
+    val: temp!=null ? `${Math.round(temp)} °C${hotSince?` · hot for ${Math.round(hotFor)} s`:temp>=350?' · undecided zone':''}` : !running?'—' : supported.has('7C')||supported.has('78')?'no valid data':'not reported by this car', vote:vt, ts:tk&&stateTs[tk]});
+
+  // context only (no vote)
+  const rq=bw('request'), so=bw('soot'), di=bw('dist'), co=bw('count');
+  if(rq) sig.push({name:'BMW regeneration requested', src:'DDE 2C 10 04 04', rule:'context', val:bmwVal(rq), vote:null, info:1, ts:rq.ts});
+  if(so) sig.push({name:'BMW soot mass (raw)', src:'DDE 2C 10 03 EA', rule:'drops during a regeneration', val:bmwVal(so)+(so.changed?' ·  changed':''), vote:null, info:1, ts:so.ts});
+  const bp=bw('backp'), dpw=bw('dp');
+  if(bp) sig.push({name:'BMW exhaust back pressure (raw)', src:'DDE 2C 10 04 20', rule:'rises as the DPF fills', val:bmwVal(bp)+(bp.changed?' · changed':''), vote:null, info:1, ts:bp.ts});
+  if(dpw) sig.push({name:'BMW DPF Δ pressure (raw)', src:'DDE 2C 10 04 3C', rule:'rises as the DPF fills · drops after a regen', val:bmwVal(dpw)+(dpw.changed?' · changed':''), vote:null, info:1, ts:dpw.ts});
+  if(fin(state.dpfDp)) sig.push({name:'DPF Δ pressure', src:'PID 7A', rule:'standard OBD', val:state.dpfDp.toFixed(2)+' kPa', vote:null, info:1, ts:stateTs.dpfDp});
+  if(fin(state.exhP)) sig.push({name:'Exhaust back pressure', src:'PID 73', rule:'standard OBD', val:state.exhP.toFixed(2)+' kPa', vote:null, info:1, ts:stateTs.exhP});
+  if(di) sig.push({name:'BMW distance since last regen (raw)', src:'DDE 2C 10 03 EB', rule:'resets when one finishes', val:bmwVal(di), vote:null, info:1, ts:di.ts});
+  if(co) sig.push({name:'Last regeneration finished', src:'counter reset / count up', rule:'context', val:bmw.justDone?`${clock(bmw.justDone)} (${ago(bmw.justDone)})`:'not seen this session', vote:null, info:1, ts:co.ts});
+
+  // decide
+  const voters=sig.filter(s=>!s.info), used=voters.find(s=>s.vote!==null);
+  const on = used ? used.vote : null; if(used) used.used=true;
+  const disagree = voters.some(s=>s.vote!==null && s.vote!==on);
+  regenNow=on; regenSrc=used?used.src:'';
+
+  $('regenDot').className='dot'+(on===true?' on':on===false?' off':'');
+  $('regenTxt').textContent= on===true?'Regenerating':on===false?'Not regenerating':'Unknown';
+  $('regenWhy').innerHTML = used ? `Decided by <b>${esc(used.name)}</b> (${esc(used.src)}).${disagree?' <span class="chg">Signals disagree — see the table.</span>':''}`
+    : running ? 'No signal can decide yet.'+(bmw.list.length?'':' Press “Watch BMW DPF values” to read the engine module.') : 'Connect to see regeneration status.';
+
+  const voteTag=s=>s.info?'<span class="meta">info</span>':`<span class="vote ${s.vote===true?'on':s.vote===false?'off':'none'}">${s.vote===true?'regen':s.vote===false?'idle':'no vote'}</span>`;
+  $('regenSignals').innerHTML = `<table class="xt"><thead><tr><th>Signal</th><th>Value</th><th>Says</th><th>Updated</th></tr></thead><tbody>${sig.map(s=>
+    `<tr class="${s.used?'used':''}${s.info?' dimrow-soft':''}"><td>${esc(s.name)}${s.used?'<span class="badge">← decides</span>':''}<div class="meta">${esc(s.src)} · ${esc(s.rule)}</div></td>
+     <td class="code" style="color:var(--text)">${esc(s.val)}</td><td>${voteTag(s)}${!s.info&&s.vote!==null&&s.vote!==on?' <span class="chg" title="disagrees with the decision">≠</span>':''}</td><td class="meta">${ago(s.ts)}</td></tr>`).join('')}</tbody></table>`;
+
+  // event log of decision changes
+  if(running && on!==lastDecision && !(lastDecision===undefined && on===null)){
+    const vals=voters.filter(s=>s.vote!==null||s.ts).map(s=>`${s.src}: ${s.val}`).join(' · ');
+    regenEvents.unshift({t:now,on,by:used?used.src:'—',vals}); regenEvents=regenEvents.slice(0,30); lastDecision=on;
+  }
+  $('regenEvents').innerHTML = regenEvents.length ? `<div class="meta" style="margin:10px 0 4px">Status changes (latest first)</div>`+regenEvents.slice(0,8).map(e=>
+    `<div class="ev"><time>${clock(e.t)}</time><span class="vote ${e.on===true?'on':e.on===false?'off':'none'}">${e.on===true?'regen':e.on===false?'idle':'unknown'}</span><span class="meta">via ${esc(e.by)} — ${esc(e.vals)}</span></div>`).join('') : '';
+}
+
+// ---------- Identifier sweep ----------
+let found=[];
+function sweepTable(prog){
+  return (prog?`<div class="meta" style="margin-top:8px">${prog}</div>`:'')+(found.length?`<table class="xt"><thead><tr><th>Identifier</th><th>Bytes</th><th>Raw</th><th>Text</th></tr></thead><tbody>${found.map(f=>`<tr><td class="code">22 ${hx(f.did>>8)} ${hx(f.did&255)}</td><td>${f.val.length}</td><td class="code" style="color:var(--text)">${hexs(f.val.slice(0,16))}${f.val.length>16?' …':''}</td><td>${esc(asc(f.val.slice(0,24)))}</td></tr>`).join('')}</tbody></table>`:'');
+}
+async function sweep(){
+  const a=parseInt($('swFrom').value,16), b=parseInt($('swTo').value,16), el=$('sweep');
+  if(isNaN(a)||isNaN(b)||b<a||b>0xFFFF) return xout('<span class="no">Enter a hex range like 4000 to 40FF.</span>');
+  if(b-a>1023) return xout('<span class="no">Max 1024 identifiers per sweep.</span>');
+  found=[]; let refused=0;
+  for(let d=a; d<=b && elm; d++){
+    if((d-a)%8===0) el.innerHTML=sweepTable(`Reading 22 ${hx(d>>8)} ${hx(d&255)} · ${d-a+1}/${b-a+1} · ${found.length} found`);
+    const r=await uds(0x12,[0x22,d>>8,d&255]);
+    if(r&&r.p&&r.p[0]===0x62) found.push({did:d,val:r.p.slice(3)});
+    else if(r&&r.p&&r.p[0]===0x7F&&r.p[2]===0x11) refused++;
+    if(refused>=3&&!found.length){ el.innerHTML=sweepTable('The engine module doesn’t support “22” reads (typical for E-series / N47 — use the DPF panel instead).'); return; }
+  }
+  el.innerHTML=sweepTable(`${found.length} identifier${found.length===1?'':'s'} answered in ${hx(a>>8)}${hx(a&255)}–${hx(b>>8)}${hx(b&255)}.`);
+}
+$('btnWatchFound').onclick=()=>{
+  bmw.mode='sweep'; bmw.list=found.map(f=>({label:'22 '+hx(f.did>>8)+' '+hx(f.did&255),req:[0x22,f.did>>8,f.did&255],val:f.val,num:f.val.length<=4?f.val.reduce((n,b)=>n*256+b,0):null}));
+  renderWatch(); if(!watching) setWatching(true); $('dpfBmw').scrollIntoView({behavior:'smooth',block:'center'});
+};
+
+// ---------- Wiring ----------
+async function start(make){
+  try{
+    setStatus('Connecting…'); const tr=await make(); elm=new ELM(tr); bmwMode='raw'; bmwChecked=false; lastCea=null; await init();
+    running=true; setStatus('Live','on'); toggle(true); updateRegen();
+    try{ navigator.wakeLock && (window._wl=await navigator.wakeLock.request('screen')); }catch(e){}
+    loop();
+  }catch(e){ console.error(e); setStatus(e.message||String(e),'err'); if(elm) elm.tr.close(); elm=null; toggle(false); }
+}
+async function stop(){ running=false; setWatching(false); if(elm) await elm.tr.close(); elm=null; toggle(false); if(!$('status').classList.contains('err')) setStatus('Disconnected'); try{window._wl&&window._wl.release()}catch(e){} }
+function toggle(on){ ['btnBle','btnSerial','btnDemo'].forEach(b=>$(b).disabled=on); ['btnStop','btnDtc','btnClear','btnRec','btnDpfWatch',...XBTNS].forEach(b=>$(b).disabled=!on); $('btnWatchFound').disabled=!(on&&found.length); }
+
+$('btnBle').onclick=()=>{ if(!navigator.bluetooth) return setStatus('Web Bluetooth not available in this browser — use Chrome/Edge','err'); start(bleTransport); };
+$('btnSerial').onclick=()=>{ if(!navigator.serial) return setStatus('Web Serial not available — use desktop Chrome/Edge','err'); start(serialTransport); };
+$('btnDemo').onclick=()=>start(async()=>demoTransport());
+$('btnStop').onclick=stop;
+$('btnDtc').onclick=()=>readDtcs();
+$('btnClear').onclick=async()=>{ if(!confirm('Clear all standard fault codes and turn off the engine light?\n\nThis also resets readiness monitors (relevant before an inspection). Do it with the engine OFF and ignition ON.')) return;
+  await elm.send('04',6000); $('dtcs').textContent='Clear command sent. Read again to confirm.'; };
+$('btnRec').onclick=()=>{ recording=!recording; $('btnRec').textContent=recording?'Stop recording':'Start recording'; $('btnCsv').disabled=!rec.length&&!recording; };
+$('btnCsv').onclick=()=>{ if(!rec.length) return; const keys=[...new Set(rec.flatMap(Object.keys))];
+  const csv=[keys.join(','),...rec.map(r=>keys.map(k=>r[k]??'').join(','))].join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='obd-log-'+new Date().toISOString().slice(0,16).replace(/:/g,'')+'.csv'; a.click(); };
+$('btnDpfWatch').onclick=()=>setWatching(!watching);
+$('btnCheck').onclick=()=>runExpert(checkAdapter);
+$('btnScan').onclick=()=>runExpert(scanModules);
+$('btnSend').onclick=()=>runExpert(rawSend);
+$('btnSweep').onclick=()=>runExpert(sweep);
+$('xReq').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!$('btnSend').disabled) $('btnSend').click(); });
+// ---------- Copy buttons ----------
+async function copyText(txt){
+  try{ await navigator.clipboard.writeText(txt); return true; }
+  catch(e){ const ta=document.createElement('textarea'); ta.value=txt; ta.style.cssText='position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta); ta.focus(); ta.select(); let ok=false; try{ ok=document.execCommand('copy'); }catch(_){} ta.remove(); return ok; }
+}
+function flash(btn,ok){ const t=btn.dataset.label||btn.textContent; btn.dataset.label=t; btn.textContent=ok?'Copied ✓':'Copy failed'; setTimeout(()=>btn.textContent=t,1500); }
+['info','regenSignals','regenEvents','dpfBmw','dtcs','scan','xout','sweep','log'].forEach(id=>{
+  const el=$(id), w=document.createElement('div'); w.className='copywrap';
+  el.parentNode.insertBefore(w,el); w.appendChild(el);
+  const b=document.createElement('button'); b.className='copybtn'; b.textContent='Copy'; b.title='Copy the text in this box';
+  b.onclick=async e=>{ e.stopPropagation(); flash(b, await copyText(el.innerText.trim())); };
+  w.appendChild(b);
+});
+$('btnReport').onclick=async()=>{
+  const sec=(t,id)=>{ const s=$(id).innerText.trim(); return s?`### ${t}\n${s}\n`:''; };
+  const log=$('log').textContent.trim().split('\n').slice(-300).join('\n');
+  const txt=[`OBD dash report · ${new Date().toISOString()} · car setting: ${$('car').selectedOptions[0].text}`,
+    sec('Connection','info'), sec('Check adapter / console','xout'), sec('Module scan','scan'), sec('DPF signals','regenSignals'),
+    log?`### Adapter traffic (last 300 lines)\n${log}`:''].filter(Boolean).join('\n');
+  flash($('btnReport'), await copyText(txt));
+};
+
+addEventListener('resize',drawChart); drawChart();
+</script>
+</body>
+</html>
